@@ -1,0 +1,13 @@
+{
+  "include": ["."],
+  "compilerOptions": {
+    "module": "Preserve",
+    "target": "ES2017",
+    "lib": ["ES2017", "DOM"],
+    "moduleResolution": "Bundler",
+    "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+  },
+  "exclude": ["node_modules"]
+}
