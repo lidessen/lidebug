@@ -21,7 +21,7 @@ async function init(name: string) {
       typescript: "^5.4.5",
     },
     dependencies: {
-      "@lidessen/debug": "npm:@jsr/lidessen__debug@^0.1.2",
+      "@lidessen/debug": "npm:@jsr/lidessen__debug@^latest",
     },
     engines: {
       node: ">=20.0.0",
