@@ -1,3 +1,4 @@
+import "disposablestack/auto";
 import fs from "node:fs";
 import { defu } from "defu";
 import { startBrowser } from "./browser";
@@ -11,7 +12,7 @@ async function run(options: RunOptions, name: string) {
 
   const storageStateExists = fs.existsSync(storageState);
 
-  const globalOptions = (await import(path.resolve("./config.global"))).default;
+  const globalOptions = await readGlobalConfig();
 
   const mergedOptions = defu(options, globalOptions);
 
@@ -19,10 +20,9 @@ async function run(options: RunOptions, name: string) {
     launchOptions: mergedOptions.playwright?.launchOptions,
     browserContextOptions: {
       ...mergedOptions.playwright?.browserContextOptions,
-      storageState:
-        storageStateExists && mergedOptions.incognitoMode === false
-          ? storageState
-          : undefined,
+      storageState: storageStateExists && mergedOptions.incognitoMode === false
+        ? storageState
+        : undefined,
     },
   });
 
@@ -60,6 +60,14 @@ async function run(options: RunOptions, name: string) {
   });
 }
 
+async function readGlobalConfig() {
+  try {
+    return (await import(path.resolve("./config.global"))).default;
+  } catch (e) {
+    return {};
+  }
+}
+
 function getStorageStatePath(name: string) {
   return `.auth/${name}.json`;
 }
@@ -78,4 +86,4 @@ export async function runApp() {
   await run(data, name);
 }
 
-export type { RunOptions, OverrideOption, ModifyOption };
+export type { ModifyOption, OverrideOption, RunOptions };
