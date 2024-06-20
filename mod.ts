@@ -17,6 +17,7 @@ async function run(options: RunOptions, name: string) {
   const mergedOptions = defu(options, globalOptions);
 
   await using instance = await startBrowser({
+    browserType: mergedOptions.playwright?.browserType,
     launchOptions: mergedOptions.playwright?.launchOptions,
     browserContextOptions: {
       ...mergedOptions.playwright?.browserContextOptions,

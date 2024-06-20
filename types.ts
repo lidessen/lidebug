@@ -6,6 +6,7 @@ export interface RunOptions {
   incognitoMode?: boolean;
   initScripts?: (string | (() => void))[];
   playwright?: {
+    browserType?: "chromium" | "firefox" | "webkit";
     launchOptions?: import("playwright").LaunchOptions;
     browserContextOptions?: import("playwright").BrowserContextOptions;
   };
@@ -23,14 +24,14 @@ export interface OverrideOption {
 
 export type ModifyOption =
   | {
-      urlPatterns: (string | RegExp)[];
-      json: <T = any>(json: T) => any | Promise<any>;
-    }
+    urlPatterns: (string | RegExp)[];
+    json: <T = any>(json: T) => any | Promise<any>;
+  }
   | {
-      urlPatterns: (string | RegExp)[];
-      js: (js: string) => string | Promise<string>;
-    }
+    urlPatterns: (string | RegExp)[];
+    js: (js: string) => string | Promise<string>;
+  }
   | {
-      urlPatterns: (string | RegExp)[];
-      html: ($: import("cheerio").CheerioAPI) => void | Promise<void>;
-    };
+    urlPatterns: (string | RegExp)[];
+    html: ($: import("cheerio").CheerioAPI) => void | Promise<void>;
+  };

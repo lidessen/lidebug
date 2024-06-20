@@ -1,4 +1,10 @@
-import { chromium } from "playwright";
+import { chromium, firefox, webkit } from "playwright";
+
+const browserTypeMap = {
+  chromium,
+  firefox,
+  webkit,
+};
 
 class Browser implements AsyncDisposable {
   readonly context: StartBrowserOptionContext;
@@ -7,7 +13,7 @@ class Browser implements AsyncDisposable {
   }
 
   async use(
-    callback: (context: StartBrowserOptionContext) => Promise<void>
+    callback: (context: StartBrowserOptionContext) => Promise<void>,
   ): Promise<void> {
     await callback(this.context);
   }
@@ -20,9 +26,10 @@ class Browser implements AsyncDisposable {
 }
 
 export async function startBrowser(
-  options: StartBrowserOption
+  options: StartBrowserOption,
 ): Promise<Browser> {
-  const browser = await chromium.launch({
+  const browserType = options.browserType ?? "chromium";
+  const browser = await browserTypeMap[browserType].launch({
     timeout: 0,
     ...options.launchOptions,
   });
@@ -46,6 +53,7 @@ interface StartBrowserOptionContext {
 }
 
 interface StartBrowserOption {
+  browserType?: "chromium" | "firefox" | "webkit";
   launchOptions?: import("playwright").LaunchOptions;
   browserContextOptions?: import("playwright").BrowserContextOptions;
   /**
