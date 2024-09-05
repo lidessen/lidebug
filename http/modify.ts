@@ -55,9 +55,8 @@ export async function modifyResponse(
         }
 
         if ("response" in modify) {
-          response.response = await resp(ctx, modify.response);
-          response.modified = true;
           consola.log(chalk.bgGreen(`MODIFY RESPONSE`), chalk.gray(requestUrl));
+          return await resp(ctx, modify.response);
         }
       } catch (error) {
         consola.error(error);
