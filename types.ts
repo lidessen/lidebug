@@ -39,9 +39,5 @@ export type ModifyOption =
     }
   | {
       urlPatterns: (string | RegExp)[];
-      response: (
-        ctx: HttpResponseContext
-      ) =>
-        | import("playwright").APIResponse
-        | Promise<import("playwright").APIResponse>;
+      response: (ctx: HttpResponseContext) => void | Promise<void>;
     };

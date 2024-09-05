@@ -106,9 +106,9 @@ async function js(
 
 async function resp(
   ctx: HttpResponseContext,
-  modify: (ctx: HttpResponseContext) => APIResponse | Promise<APIResponse>
+  modify: (ctx: HttpResponseContext) => void | Promise<void>
 ) {
-  return await modify(ctx);
+  await modify(ctx);
 }
 
 function responseType(response: APIResponse, type: string) {
