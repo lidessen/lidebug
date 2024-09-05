@@ -34,4 +34,12 @@ export type ModifyOption =
   | {
       urlPatterns: (string | RegExp)[];
       html: ($: import("cheerio").CheerioAPI) => void | Promise<void>;
+    }
+  | {
+      urlPatterns: (string | RegExp)[];
+      response: (
+        response: import("playwright").APIResponse
+      ) =>
+        | import("playwright").APIResponse
+        | Promise<import("playwright").APIResponse>;
     };

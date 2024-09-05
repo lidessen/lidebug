@@ -53,6 +53,12 @@ export async function modifyResponse(
           response.modified = true;
           consola.log(chalk.bgGreen(`MODIFY HTML`), chalk.gray(requestUrl));
         }
+
+        if ("response" in modify) {
+          response.response = await resp(response.response, modify.response);
+          response.modified = true;
+          consola.log(chalk.bgGreen(`MODIFY RESPONSE`), chalk.gray(requestUrl));
+        }
       } catch (error) {
         consola.error(error);
       }
@@ -97,6 +103,13 @@ async function js(
   modify: (code: string) => string | Promise<string>
 ) {
   return await modify(body);
+}
+
+async function resp(
+  response: APIResponse,
+  modify: (response: APIResponse) => APIResponse | Promise<APIResponse>
+) {
+  return await modify(response);
 }
 
 function responseType(response: APIResponse, type: string) {
