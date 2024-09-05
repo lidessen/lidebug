@@ -55,7 +55,7 @@ export async function modifyResponse(
         }
 
         if ("response" in modify) {
-          response.response = await resp(response.response, modify.response);
+          response.response = await resp(ctx, modify.response);
           response.modified = true;
           consola.log(chalk.bgGreen(`MODIFY RESPONSE`), chalk.gray(requestUrl));
         }
@@ -106,10 +106,10 @@ async function js(
 }
 
 async function resp(
-  response: APIResponse,
-  modify: (response: APIResponse) => APIResponse | Promise<APIResponse>
+  ctx: HttpResponseContext,
+  modify: (ctx: HttpResponseContext) => APIResponse | Promise<APIResponse>
 ) {
-  return await modify(response);
+  return await modify(ctx);
 }
 
 function responseType(response: APIResponse, type: string) {

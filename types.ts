@@ -1,3 +1,5 @@
+import { HttpResponseContext } from "./http/http_context";
+
 export interface RunOptions {
   startUrl?: string;
   /**
@@ -38,7 +40,7 @@ export type ModifyOption =
   | {
       urlPatterns: (string | RegExp)[];
       response: (
-        response: import("playwright").APIResponse
+        ctx: HttpResponseContext
       ) =>
         | import("playwright").APIResponse
         | Promise<import("playwright").APIResponse>;
