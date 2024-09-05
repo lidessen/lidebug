@@ -1,4 +1,4 @@
-import { HttpResponseContext, RouteOptions } from "./http_context";
+import { HttpResponseContext, type RouteOptions } from "./http_context";
 import { modifyResponse } from "./modify";
 import { overrideResponse } from "./override";
 

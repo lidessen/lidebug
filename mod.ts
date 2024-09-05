@@ -21,9 +21,10 @@ async function run(options: RunOptions, name: string) {
     launchOptions: mergedOptions.playwright?.launchOptions,
     browserContextOptions: {
       ...mergedOptions.playwright?.browserContextOptions,
-      storageState: storageStateExists && mergedOptions.incognitoMode === false
-        ? storageState
-        : undefined,
+      storageState:
+        storageStateExists && mergedOptions.incognitoMode === false
+          ? storageState
+          : undefined,
     },
   });
 
@@ -65,6 +66,7 @@ async function readGlobalConfig() {
   try {
     return (await import(path.resolve("./config.global"))).default;
   } catch (e) {
+    console.warn("No global config found", e);
     return {};
   }
 }

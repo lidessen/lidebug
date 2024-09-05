@@ -1,4 +1,4 @@
-import { Page, Route, Request } from "playwright";
+import { Page, Request, Route } from "playwright";
 import type { ModifyOption, OverrideOption } from "../types";
 
 export class HttpResponseContext {
