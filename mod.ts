@@ -245,7 +245,7 @@ export interface StartBrowserOption {
   plugins?: Plugin[];
 }
 
-export type Plugin = (instance: Xiaoxitian) => Promise<void>;
+export type Plugin = (instance: Xiaoxitian) => void | Promise<void>;
 
 type FulfillResponse = Parameters<import("playwright").Route["fulfill"]>[0];
 
