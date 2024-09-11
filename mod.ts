@@ -29,6 +29,10 @@ class Route {
     return this.#route.request.bind(this.#route);
   }
 
+  get fulfillResponse() {
+    return this.#fulfillResponse;
+  }
+
   fetch = async (
     options?: Parameters<import("playwright").Route["fetch"]>[0]
   ) => {
@@ -90,7 +94,11 @@ class Xiaoxitian implements AsyncDisposable {
           }
         }
       }
-      await route.fulfill(await $route.fetch());
+      if ($route.fulfillResponse.body) {
+        await route.fulfill(await $route.fetch());
+      } else {
+        await route.continue();
+      }
     });
 
     process.on("SIGINT", () => {
