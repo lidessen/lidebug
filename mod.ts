@@ -140,8 +140,9 @@ class Xiaoxitian implements AsyncDisposable {
     });
   }
 
-  mapRemote(url: Pattern, target: Target) {
+  mapRemote(url: Pattern, _target: Target) {
     this.#route(url, async (route) => {
+      let target = _target;
       const source = route.request().url();
       if (typeof target === "function") {
         target = target(source);
@@ -153,8 +154,9 @@ class Xiaoxitian implements AsyncDisposable {
     });
   }
 
-  mapLocal(url: Pattern, target: Target) {
+  mapLocal(url: Pattern, _target: Target) {
     this.#route(url, async (route) => {
+      let target = _target;
       const source = route.request().url();
       if (typeof target === "function") {
         target = target(source);
