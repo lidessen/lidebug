@@ -27,7 +27,7 @@ class Route {
 
   get request() {
     return this.#route.request.bind(
-      this.#route,
+      this.#route
     ) as import("playwright").Route["request"];
   }
 
@@ -36,13 +36,17 @@ class Route {
   }
 
   fetch = async (
-    options?: Parameters<import("playwright").Route["fetch"]>[0],
+    options?: Parameters<import("playwright").Route["fetch"]>[0]
   ) => {
-    if (!this.#response && !this.#fulfillResponse.body) {
+    if (
+      !this.#response &&
+      !this.#fulfillResponse.body &&
+      !this.#fulfillResponse.json
+    ) {
       this.#response = await this.#route.fetch(options);
       this.#fulfillResponse = {
         ...this.#fulfillResponse,
-        body: await this.#response.text(),
+        body: await this.#response.text().catch(() => undefined),
         status: this.#response.status(),
         headers: this.#response.headers(),
       };
@@ -80,51 +84,58 @@ class Xiaoxitian implements AsyncDisposable {
     this.open = this.open.bind(this);
 
     this.#context.route("**/*", async (route) => {
-      const $route = new Route(route);
-      const url = route.request().url();
-      for (const [pattern, middleware] of this.#routeMiddlewares) {
-        if (typeof pattern === "string") {
-          const regex = globToRegex(pattern);
-          if (regex.test(url)) {
-            await middleware($route);
-          }
-        } else if (pattern instanceof RegExp) {
-          if (pattern.test(url)) {
-            await middleware($route);
-          }
-        } else {
-          if (pattern(new URL(url))) {
-            await middleware($route);
-          }
-        }
-      }
-      if ($route.fulfillResponse.body) {
-        await route.fulfill(await $route.fetch());
-      } else {
-        await route.continue();
-        const response = await route.request().response();
-        response && $route.fulfill({
-          body: await response.text().catch(() => ""),
-          status: response.status(),
-          headers: response.headers(),
-          json: await response.json().catch(() => null),
-        });
-      }
-      for (const [pattern, middleware] of this.#routePostMiddlewares) {
-        if (typeof pattern === "string") {
-          const regex = globToRegex(pattern);
-          if (regex.test(url)) {
-            await middleware($route);
-          }
-        } else if (pattern instanceof RegExp) {
-          if (pattern.test(url)) {
-            await middleware($route);
-          }
-        } else {
-          if (pattern(new URL(url))) {
-            await middleware($route);
+      try {
+        const $route = new Route(route);
+        const url = route.request().url();
+        for (const [pattern, middleware] of this.#routeMiddlewares) {
+          if (typeof pattern === "string") {
+            const regex = globToRegex(pattern);
+            if (regex.test(url)) {
+              await middleware($route);
+            }
+          } else if (pattern instanceof RegExp) {
+            if (pattern.test(url)) {
+              await middleware($route);
+            }
+          } else {
+            if (pattern(new URL(url))) {
+              await middleware($route);
+            }
           }
         }
+        if ($route.fulfillResponse.body) {
+          await route.fulfill(await $route.fetch());
+        } else {
+          await route.continue();
+          const response = await route.request().response();
+          response &&
+            $route.fulfill({
+              body: await response.text().catch(() => ""),
+              status: response.status(),
+              headers: response.headers(),
+            });
+        }
+        for (const [pattern, middleware] of this.#routePostMiddlewares) {
+          if (typeof pattern === "string") {
+            const regex = globToRegex(pattern);
+            if (regex.test(url)) {
+              await middleware($route);
+            }
+          } else if (pattern instanceof RegExp) {
+            if (pattern.test(url)) {
+              await middleware($route);
+            }
+          } else {
+            if (pattern(new URL(url))) {
+              await middleware($route);
+            }
+          }
+        }
+      } catch (error) {
+        if (error.message.includes("context or browser has been closed")) {
+          return;
+        }
+        console.warn(error.message);
       }
     });
 
@@ -135,7 +146,7 @@ class Xiaoxitian implements AsyncDisposable {
   }
 
   addInitScript: import("playwright").BrowserContext["addInitScript"] = async (
-    script,
+    script
   ) => {
     await this.#context.addInitScript(script);
   };
@@ -146,9 +157,14 @@ class Xiaoxitian implements AsyncDisposable {
 
   async open(url: string) {
     const page = await this.#context.newPage();
-    await page.goto(url, {
-      timeout: 0,
-    });
+    try {
+      await page.goto(url, {
+        timeout: 0,
+      });
+    } catch (error) {
+      console.warn(error.message);
+      this.#context.close();
+    }
     page.on("close", () => {
       if (this.pages.length === 0) {
         this.#context.close();
@@ -162,7 +178,7 @@ class Xiaoxitian implements AsyncDisposable {
     callback: (route: Route) => void | Promise<void>,
     options?: {
       post?: boolean;
-    },
+    }
   ) => {
     if (options?.post) {
       this.#routePostMiddlewares.push([url, callback]);
@@ -174,23 +190,35 @@ class Xiaoxitian implements AsyncDisposable {
   mock(url: Pattern, response: FulfillResponse) {
     this.#route(url, async (route) => {
       const source = route.request().url();
-      print.map(source, "mocked");
+      print.mocked(source);
       await route.fulfill(response);
     });
   }
 
   tap(
     url: Pattern,
-    callback: (
-      url: string,
-      response: FulfillResponse,
-    ) => void | Promise<void>,
+    callback: (url: string, response: FulfillResponse) => void | Promise<void>
   ) {
-    this.#route(url, async (route) => {
-      await callback(route.request().url(), route.fulfillResponse);
-    }, {
-      post: true,
-    });
+    this.#route(
+      url,
+      async (route) => {
+        const isJson =
+          route.fulfillResponse.contentType === "application/json" ||
+          route.fulfillResponse.headers?.["content-type"]?.includes(
+            "application/json"
+          );
+        await callback(route.request().url(), {
+          ...route.fulfillResponse,
+          json:
+            route.fulfillResponse.json || isJson
+              ? JSON.parse(route.fulfillResponse.body as string)
+              : undefined,
+        });
+      },
+      {
+        post: true,
+      }
+    );
   }
 
   mapRemote(url: Pattern, _target: Target, fallback?: boolean) {
@@ -200,7 +228,6 @@ class Xiaoxitian implements AsyncDisposable {
       if (typeof target === "function") {
         target = target(source);
       }
-      print.map(source, target);
       const response = await route.fetch({
         url: target,
       });
@@ -209,6 +236,8 @@ class Xiaoxitian implements AsyncDisposable {
         await route.fetch({
           url: source,
         });
+      } else if (source !== target) {
+        print.map(source, target);
       }
     });
   }
@@ -223,12 +252,13 @@ class Xiaoxitian implements AsyncDisposable {
       if (typeof target === "function") {
         target = target(source);
       }
-      print.map(originalUrl, target);
+
       try {
         await route.fulfill({
           body: fs.readFileSync(target, "utf-8"),
           contentType: mimetype(target),
         });
+        print.map(originalUrl, target);
       } catch (error) {
         if (fallback) {
           print.fallback(originalUrl, error.message);
@@ -243,13 +273,13 @@ class Xiaoxitian implements AsyncDisposable {
       const source = route.request().url();
       const response = await route.fetch();
       // get contentType from response
-      const contentType = response.contentType ||
-        response.headers["content-type"];
+      const contentType =
+        response.contentType || response.headers["content-type"];
       if (contentType?.includes("text/html")) {
         const body = response.body;
         const $ = load(body);
         callback(load(body));
-        print.map(source, "modified");
+        print.modified(source);
         await route.fulfill({
           body: $.html(),
           contentType,
@@ -263,11 +293,11 @@ class Xiaoxitian implements AsyncDisposable {
       const source = route.request().url();
       const response = await route.fetch();
       // get contentType from response
-      const contentType = response.contentType ||
-        response.headers["content-type"];
+      const contentType =
+        response.contentType || response.headers["content-type"];
       if (contentType?.includes("application/javascript")) {
         const body = response.body as string;
-        print.map(source, "modified");
+        print.modified(source);
         await route.fulfill({
           body: callback(body),
           contentType,
@@ -282,16 +312,19 @@ class Xiaoxitian implements AsyncDisposable {
       const source = route.request().url();
       const response = await route.fetch();
       // get contentType from response
-      const contentType = response.contentType ||
-        response.headers["content-type"];
-      if (contentType?.includes("application/json")) {
-        const body = JSON.parse(response.body as string);
-        print.map(source, "modified");
-        await route.fulfill({
-          body: JSON.stringify(callback(body)),
-          contentType,
-        });
-      }
+      const contentType =
+        response.contentType ||
+        response.headers["content-type"] ||
+        "application/json";
+      const body = response.body
+        ? JSON.parse(response.body as string)
+        : response.json;
+      print.modified(source);
+      const json = callback(body);
+      await route.fulfill({
+        body: JSON.stringify(json),
+        contentType,
+      });
     });
   }
 
@@ -336,9 +369,10 @@ export async function xiaoxitian(options: StartBrowserOption) {
 
   const context = await browser.newContext({
     ...options.browserContextOptions,
-    storageState: storageStateExists && options.incognitoMode === false
-      ? storageState
-      : undefined,
+    storageState:
+      storageStateExists && options.incognitoMode === false
+        ? storageState
+        : undefined,
   });
 
   if (options.incognitoMode === false) {
