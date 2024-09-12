@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { chromium, firefox, webkit } from "playwright";
-import { CheerioAPI, load } from "cheerio";
+import { type CheerioAPI, load } from "cheerio";
 import { globToRegex, mimetype } from "./utils";
 import { print } from "./log";
 
@@ -26,7 +26,9 @@ class Route {
   }
 
   get request() {
-    return this.#route.request.bind(this.#route);
+    return this.#route.request.bind(
+      this.#route,
+    ) as import("playwright").Route["request"];
   }
 
   get fulfillResponse() {
@@ -34,7 +36,7 @@ class Route {
   }
 
   fetch = async (
-    options?: Parameters<import("playwright").Route["fetch"]>[0]
+    options?: Parameters<import("playwright").Route["fetch"]>[0],
   ) => {
     if (!this.#response && !this.#fulfillResponse.body) {
       this.#response = await this.#route.fetch(options);
@@ -61,6 +63,8 @@ class Xiaoxitian implements AsyncDisposable {
   #context: import("playwright").BrowserContext;
   #shouldDispose = true;
   #routeMiddlewares: [Pattern, (route: Route) => void | Promise<void>][] = [];
+  #routePostMiddlewares: [Pattern, (route: Route) => void | Promise<void>][] =
+    [];
 
   constructor(context: StartBrowserOptionContext) {
     this.#browser = context.browser;
@@ -69,6 +73,7 @@ class Xiaoxitian implements AsyncDisposable {
     this.mapLocal = this.mapLocal.bind(this);
     this.mapRemote = this.mapRemote.bind(this);
     this.mock = this.mock.bind(this);
+    this.tap = this.tap.bind(this);
     this.modifyJs = this.modifyJs.bind(this);
     this.modifyJson = this.modifyJson.bind(this);
     this.modifyHTML = this.modifyHTML.bind(this);
@@ -76,9 +81,8 @@ class Xiaoxitian implements AsyncDisposable {
 
     this.#context.route("**/*", async (route) => {
       const $route = new Route(route);
+      const url = route.request().url();
       for (const [pattern, middleware] of this.#routeMiddlewares) {
-        const url = route.request().url();
-
         if (typeof pattern === "string") {
           const regex = globToRegex(pattern);
           if (regex.test(url)) {
@@ -98,6 +102,29 @@ class Xiaoxitian implements AsyncDisposable {
         await route.fulfill(await $route.fetch());
       } else {
         await route.continue();
+        const response = await route.request().response();
+        response && $route.fulfill({
+          body: await response.text().catch(() => ""),
+          status: response.status(),
+          headers: response.headers(),
+          json: await response.json().catch(() => null),
+        });
+      }
+      for (const [pattern, middleware] of this.#routePostMiddlewares) {
+        if (typeof pattern === "string") {
+          const regex = globToRegex(pattern);
+          if (regex.test(url)) {
+            await middleware($route);
+          }
+        } else if (pattern instanceof RegExp) {
+          if (pattern.test(url)) {
+            await middleware($route);
+          }
+        } else {
+          if (pattern(new URL(url))) {
+            await middleware($route);
+          }
+        }
       }
     });
 
@@ -108,7 +135,7 @@ class Xiaoxitian implements AsyncDisposable {
   }
 
   addInitScript: import("playwright").BrowserContext["addInitScript"] = async (
-    script
+    script,
   ) => {
     await this.#context.addInitScript(script);
   };
@@ -119,7 +146,9 @@ class Xiaoxitian implements AsyncDisposable {
 
   async open(url: string) {
     const page = await this.#context.newPage();
-    await page.goto(url);
+    await page.goto(url, {
+      timeout: 0,
+    });
     page.on("close", () => {
       if (this.pages.length === 0) {
         this.#context.close();
@@ -128,8 +157,18 @@ class Xiaoxitian implements AsyncDisposable {
     return page;
   }
 
-  #route = (url: Pattern, callback: (route: Route) => void | Promise<void>) => {
-    this.#routeMiddlewares.push([url, callback]);
+  #route = (
+    url: Pattern,
+    callback: (route: Route) => void | Promise<void>,
+    options?: {
+      post?: boolean;
+    },
+  ) => {
+    if (options?.post) {
+      this.#routePostMiddlewares.push([url, callback]);
+    } else {
+      this.#routeMiddlewares.push([url, callback]);
+    }
   };
 
   mock(url: Pattern, response: FulfillResponse) {
@@ -140,21 +179,21 @@ class Xiaoxitian implements AsyncDisposable {
     });
   }
 
-  mapRemote(url: Pattern, _target: Target) {
+  tap(
+    url: Pattern,
+    callback: (
+      url: string,
+      response: FulfillResponse,
+    ) => void | Promise<void>,
+  ) {
     this.#route(url, async (route) => {
-      let target = _target;
-      const source = route.request().url();
-      if (typeof target === "function") {
-        target = target(source);
-      }
-      print.map(source, target);
-      await route.fetch({
-        url: target,
-      });
+      await callback(route.request().url(), route.fulfillResponse);
+    }, {
+      post: true,
     });
   }
 
-  mapLocal(url: Pattern, _target: Target) {
+  mapRemote(url: Pattern, _target: Target, fallback?: boolean) {
     this.#route(url, async (route) => {
       let target = _target;
       const source = route.request().url();
@@ -162,13 +201,39 @@ class Xiaoxitian implements AsyncDisposable {
         target = target(source);
       }
       print.map(source, target);
+      const response = await route.fetch({
+        url: target,
+      });
+      if (response.status === 404 && fallback) {
+        print.fallback(source);
+        await route.fetch({
+          url: source,
+        });
+      }
+    });
+  }
+
+  mapLocal(url: Pattern, _target: Target, fallback?: boolean) {
+    this.#route(url, async (route) => {
+      let target = _target;
+      const originalUrl = route.request().url();
+      const u = new URL(originalUrl);
+      u.search = "";
+      const source = u.href;
+      if (typeof target === "function") {
+        target = target(source);
+      }
+      print.map(originalUrl, target);
       try {
         await route.fulfill({
           body: fs.readFileSync(target, "utf-8"),
           contentType: mimetype(target),
         });
       } catch (error) {
-        console.warn(error.message);
+        if (fallback) {
+          print.fallback(originalUrl, error.message);
+          await route.fetch();
+        }
       }
     });
   }
@@ -178,8 +243,8 @@ class Xiaoxitian implements AsyncDisposable {
       const source = route.request().url();
       const response = await route.fetch();
       // get contentType from response
-      const contentType =
-        response.contentType || response.headers["content-type"];
+      const contentType = response.contentType ||
+        response.headers["content-type"];
       if (contentType?.includes("text/html")) {
         const body = response.body;
         const $ = load(body);
@@ -198,8 +263,8 @@ class Xiaoxitian implements AsyncDisposable {
       const source = route.request().url();
       const response = await route.fetch();
       // get contentType from response
-      const contentType =
-        response.contentType || response.headers["content-type"];
+      const contentType = response.contentType ||
+        response.headers["content-type"];
       if (contentType?.includes("application/javascript")) {
         const body = response.body as string;
         print.map(source, "modified");
@@ -211,13 +276,14 @@ class Xiaoxitian implements AsyncDisposable {
     });
   }
 
+  // biome-ignore lint/suspicious/noExplicitAny: <explanation>
   modifyJson(url: Pattern, callback: (source: any) => any) {
     this.#route(url, async (route) => {
       const source = route.request().url();
       const response = await route.fetch();
       // get contentType from response
-      const contentType =
-        response.contentType || response.headers["content-type"];
+      const contentType = response.contentType ||
+        response.headers["content-type"];
       if (contentType?.includes("application/json")) {
         const body = JSON.parse(response.body as string);
         print.map(source, "modified");
@@ -270,10 +336,9 @@ export async function xiaoxitian(options: StartBrowserOption) {
 
   const context = await browser.newContext({
     ...options.browserContextOptions,
-    storageState:
-      storageStateExists && options.incognitoMode === false
-        ? storageState
-        : undefined,
+    storageState: storageStateExists && options.incognitoMode === false
+      ? storageState
+      : undefined,
   });
 
   if (options.incognitoMode === false) {
