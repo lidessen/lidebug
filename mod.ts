@@ -389,3 +389,17 @@ export async function xiaoxitian(options: StartBrowserOption) {
     timeout: 0,
   });
 }
+
+interface SetupOption {
+  context: import("playwright").BrowserContext;
+  browser: import("playwright").Browser;
+  plugins?: Plugin[];
+}
+
+export function setupPlaywright({ context, browser, plugins }: SetupOption) {
+  const instance = new Xiaoxitian({ context, browser });
+  for (const plugin of plugins ?? []) {
+    plugin(instance);
+  }
+  return instance;
+}
