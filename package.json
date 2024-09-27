@@ -5,7 +5,7 @@
   "main": "mod.ts",
   "type": "module",
   "keywords": [],
-  "author": "",
+  "author": "Lidessen",
   "license": "MIT",
   "bin": "cli.ts",
   "exports": {
