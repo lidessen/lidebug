@@ -157,11 +157,11 @@ export class Xiaoxitian implements AsyncDisposable {
     await this.#context.addInitScript(script);
   };
 
-  get pages() {
+  get pages(): import("playwright").Page[] {
     return this.#context.pages();
   }
 
-  async open(url: string) {
+  async open(url: string): Promise<import("playwright").Page> {
     const page = await this.#context.newPage();
     try {
       await page.goto(url, {

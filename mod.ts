@@ -68,7 +68,11 @@ interface SetupOption {
   plugins?: Plugin[];
 }
 
-export function setupPlaywright({ context, browser, plugins }: SetupOption) {
+export function setupPlaywright({
+  context,
+  browser,
+  plugins,
+}: SetupOption): Xiaoxitian {
   const instance = new Xiaoxitian({ context, browser });
   for (const plugin of plugins ?? []) {
     plugin(instance);
